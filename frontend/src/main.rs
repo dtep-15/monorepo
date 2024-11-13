@@ -1,4 +1,4 @@
-use api::networks::NetworkConnection;
+use api::{networks::NetworkConnection, state::DeviceState};
 use pages::{configuration_completed::ConfigurationCompleted, connecting::Connecting, home::Home};
 use leptos::prelude::*;
 
@@ -20,16 +20,37 @@ fn main() {
 			wasm_logger::init(wasm_logger::Config::new(log::Level::Warn));
 		}
 	}
+
+	let base_uri = location().origin()
+		.expect("no window.location origin");
+
+	api::init(base_uri.into());
 	
-    mount_to_body(|| view! {
-		<App />
-	});
+    mount_to_body(move || view! { <App /> });
 }
 
 #[component]
-pub fn app() -> impl IntoView {
-	let (state, set_state) = signal(AppState::Confguration);
-	// let (state, set_state) = signal(AppState::ConfgurationConnecting { network_name: "Aalto".into() });
+fn app() -> impl IntoView {
+	let device_state = LocalResource::new(|| async {
+		api::retry(api::state::state).await
+	});
+
+	view! {
+		<Suspense fallback=web::loading>
+			{move || Suspend::new(async move { view! {
+				<LoadedApp device_state=device_state.await />
+			}})}
+		</Suspense>
+	}
+}
+
+#[component]
+fn loaded_app(device_state: DeviceState) -> impl IntoView {
+	let (state, set_state) = signal(if device_state.is_configured {
+		AppState::Home
+	} else {
+		AppState::Confguration
+	});
 
 	provide_context(state);
 	provide_context(set_state);

@@ -82,10 +82,12 @@ components:
   schemas:
     State:
       type: object
+      required:
+        - is_configured
       properties:
         is_configured:
           type: boolean
-          example: 10
+          example: true
     Networks:
       type: array
       items:
@@ -101,15 +103,20 @@ components:
           example: true
     NetworkConnect:
       type: object
+      required:
+        - name
       properties:
         name:
           type: string
           example: "eduroam"
-        password_required:
-          type: boolean
-          example: true
+        password:
+          type: string
+          example: "loremipsum123"
     Schedule:
       type: object
+      required:
+        - open_at
+        - close_at
       properties:
         open_at:
           type: string

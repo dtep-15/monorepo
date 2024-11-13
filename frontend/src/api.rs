@@ -1,8 +1,27 @@
 use std::future::Future;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
+use cfg_if::cfg_if;
 use gloo_timers::future::sleep;
+
+static HTTP: OnceLock<reqwest::Client> = OnceLock::new();
+static URI_BASE: OnceLock<Arc<str>> = OnceLock::new();
+
+pub fn init(base_uri: Arc<str>) {
+	URI_BASE.get_or_init(|| base_uri);
+}
+
+// reqwest doesn't support relative URIs
+fn uri(api_uri: &str) -> String {
+	format!("{}/{}", URI_BASE.get().expect("API client uninitialized"), api_uri)
+}
+
+fn http() -> &'static reqwest::Client {
+	HTTP.get_or_init(|| {
+		reqwest::Client::new()
+	})
+}
 
 pub async fn retry<F, T>(mut f: impl FnMut() -> F) -> T
 	where F: Future<Output = anyhow::Result<T>>
@@ -19,13 +38,26 @@ pub async fn retry<F, T>(mut f: impl FnMut() -> F) -> T
 }
 
 pub mod state {
+	use super::*;
+
 	#[derive(Debug, Clone, serde::Deserialize)]
 	pub struct DeviceState {
 		pub is_configured: bool,
 	}
 
 	pub async fn state() -> anyhow::Result<DeviceState> {
-		Ok(DeviceState { is_configured: true })
+		cfg_if! {
+			if #[cfg(feature = "mock-api")] {
+				Ok(DeviceState { is_configured: true })
+			} else {
+				Ok(
+					http().get(uri("/api/state"))
+						.send().await?
+						.error_for_status()?
+						.json().await?
+				)
+			}
+		}
 	}
 }
 
@@ -39,30 +71,58 @@ pub mod networks {
 	}
 	
 	pub async fn networks() -> anyhow::Result<Vec<Network>> {
-		sleep(Duration::from_secs(1)).await;
-		Ok(vec![
-			Network {
-				name: "pseudo eduroam".into(),
-				password_required: true,
-			},
-			Network {
-				name: "Aalto open".into(),
-				password_required: false,
-			},
-			Network {
-				name: "Pixel hotspot".into(),
-				password_required: true,
-			},
-			Network {
-				name: "lorem ipsum dolor sit amet lorem ipsum dolor".into(),
-				password_required: true,
-			},
-		])
+		cfg_if! {
+			if #[cfg(feature = "mock-api")] {
+				sleep(Duration::from_secs(1)).await;
+				Ok(vec![
+					Network {
+						name: "pseudo eduroam".into(),
+						password_required: true,
+					},
+					Network {
+						name: "Aalto open".into(),
+						password_required: false,
+					},
+					Network {
+						name: "Pixel hotspot".into(),
+						password_required: true,
+					},
+					Network {
+						name: "lorem ipsum dolor sit amet lorem ipsum dolor".into(),
+						password_required: true,
+					},
+				])
+			} else {
+				Ok(
+					http().get(uri("/api/networks/"))
+						.send().await?
+						.error_for_status()?
+						.json().await?
+				)
+			}
+		}
+
 	}
 
 	pub async fn connect(connection_request: NetworkConnection) -> anyhow::Result<Result<(), ()>> {
-		_ = connection_request;
-		Ok(Ok(()))
+		cfg_if! {
+			if #[cfg(feature = "mock-api")] {
+				Ok(Ok(()))
+			} else {
+				let res = http().post(uri("/api/networks/connect"))
+					.json(&connection_request)
+					.send().await?;
+
+				// outer result - network failures and invalid JSON
+				// inner result - the device failed to connect to the network (status code = 403)
+				if res.status() == 403 {
+					Ok(Err(()))
+				} else {
+					res.error_for_status()?;
+					Ok(Ok(()))
+				}
+			}
+		}
 	}
 
 	#[derive(Debug, Clone, serde::Serialize)]
@@ -140,12 +200,31 @@ pub mod schedule {
 	}
 
 	pub async fn schedule() -> anyhow::Result<Schedule> {
-		sleep(Duration::from_secs(1)).await;
-		Ok(Schedule::new((6, 00).into(), (19, 00).into()))
+		cfg_if! {
+			if #[cfg(feature = "mock-api")] {
+				sleep(Duration::from_secs(1)).await;
+				Ok(Schedule::new((6, 00).into(), (19, 00).into()))
+			} else {
+				Ok(http().get(uri("/api/schedule"))
+					.send().await?
+					.error_for_status()?
+					.json().await?)
+			}
+		}
 	}
 
 	pub async fn set_schedule(schedule: Schedule) -> anyhow::Result<()> {
-		_ = schedule;
+		cfg_if! {
+			if #[cfg(feature = "mock-api")] {
+				_ = schedule;
+			} else {
+				http().post(uri("/api/schedule"))
+					.json(&schedule)
+					.send().await?
+					.error_for_status()?;
+			}
+		}
+
 		Ok(())
 	}
 }
