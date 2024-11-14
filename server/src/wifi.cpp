@@ -96,6 +96,7 @@ std::expected<std::vector<wifi_ap_record_t>, esp_err_t> scan() {
   }
   RIE(esp_wifi_set_mode(MODE))
   RIE(esp_wifi_start())
+  RIE(esp_wifi_scan_start(nullptr, true))
   uint16_t network_count;
   RIE(esp_wifi_scan_get_ap_num(&network_count))
   std::vector<wifi_ap_record_t> records(network_count, wifi_ap_record_t{});

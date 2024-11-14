@@ -16,59 +16,7 @@ static httpd_config_t SERVER_CONFIG = HTTPD_DEFAULT_CONFIG();
 static httpd_handle_t SERVER_HANDLE = NULL;
 
 static std::string FS_BASE;
-
-static std::optional<std::string> canonicalize_file(const std::string_view& path) {
-  auto view_begin = path.begin();
-  auto view_end = path.end();
-  std::vector<std::string_view> nodes;
-  do {
-    std::string_view current_view(view_begin, view_end);
-    size_t next_slash = current_view.find("/");
-    if (next_slash != std::string::npos) {
-      view_end = view_begin + next_slash;
-    }
-    current_view = std::string_view(view_begin, view_end);
-    if (current_view == "..") {
-      if (nodes.empty()) {
-        return {};
-      }
-      nodes.pop_back();
-    } else if (!current_view.empty()) {
-      nodes.push_back(current_view);
-    }
-    if (view_end == path.end()) {
-      break;
-    }
-    view_begin = view_end + 1;
-    view_end = path.end();
-  } while (view_begin != view_end);
-  std::string result;
-  result.reserve(path.size());
-  for (auto& node : nodes) {
-    result += "/";
-    result += node;
-  }
-  return result;
-}
-
-static std::string concat_paths(std::string_view first, std::string_view second) {
-  if (first.ends_with("/")) {
-    first = std::string_view(first.begin(), first.end() - 1);
-  }
-  if (second.starts_with("/")) {
-    second = std::string_view(second.begin() + 1, second.end());
-  }
-  std::string result;
-  result.reserve(first.length() + second.length() + 1);
-  result += first;
-  result += "/";
-  result += second;
-  return result;
-}
-
-static esp_err_t api_handler(httpd_req_t* req) {
-  return ESP_OK;
-}
+static std::vector<API> APIS;
 
 static esp_err_t file_handler(httpd_req_t* req) {
   if (req->method != HTTP_GET) {
@@ -78,19 +26,37 @@ static esp_err_t file_handler(httpd_req_t* req) {
 
   auto canonical = canonicalize_file(req->uri);
   if (!canonical.has_value()) {
-    std::cout << "404" << std::endl;
     return httpd_resp_send_404(req);
+  }
+
+  if (canonical.value() == "") {
+    canonical = "index.html";
   }
 
   std::string final_path = concat_paths(public_prefix, canonical.value());
 
-  // std::ifstream file(, std::ios::binary | std::ios::ate);
-  // std::vector<char> buf(file.tellg());
-  // file.seekg(0, std::ios::beg);
-  // file.read(buf.data(), buf.size());
-  std::cout << final_path << std::endl;
-  return httpd_resp_send(req, final_path.data(), final_path.size());
-  return ESP_OK;
+  const auto file = read_file(final_path);
+
+  if (file.has_value()) {
+    return httpd_resp_send(req, file.value().data(), file.value().size());
+  } else {
+    return httpd_resp_send_404(req);
+  }
+}
+
+static esp_err_t api_handler(httpd_req_t* req) {
+  for (const auto& api : APIS) {
+    if ((api.method == HTTP_ANY || api.method == req->method) &&
+        std::strncmp(&req->uri[5], api.name.c_str(), sizeof(req->uri) - 5) == 0) {
+      std::string content;
+      content.reserve(req->content_len);
+      httpd_req_recv(req, content.data(), content.size());
+      const auto response = api.callback({req->method, content});
+      httpd_resp_set_status(req, response.status.c_str());
+      return httpd_resp_send(req, response.content.c_str(), response.content.size());
+    }
+  }
+  return httpd_resp_send_404(req);
 }
 
 static esp_err_t main_handler(httpd_req_t* req) {
@@ -102,24 +68,26 @@ static esp_err_t main_handler(httpd_req_t* req) {
 }
 
 static const httpd_uri_t all_uris = {
-    .uri = "/*?",
-    .method = HTTP_POST,
-    .handler = nullptr,
+    .uri = "*",
+    .method = (httpd_method_t)HTTP_ANY,
+    .handler = main_handler,
     .user_ctx = nullptr,
 };
 
-std::expected<void, esp_err_t> init(const std::string fs_base) {
-  FS_BASE = fs_base;
+std::expected<void, esp_err_t> init(const std::string fs_base, const std::vector<API> apis) {
+  FS_BASE = std::move(fs_base);
+  APIS = std::move(apis);
   SERVER_CONFIG.uri_match_fn = httpd_uri_match_wildcard;
+  SERVER_CONFIG.max_uri_handlers = 1;
   esp_err_t result = ESP_OK;
   RIE(httpd_start(&SERVER_HANDLE, &SERVER_CONFIG))
-  RIE(httpd_register_uri_handler(&SERVER_HANDLE, &all_uris))
+  RIE(httpd_register_uri_handler(SERVER_HANDLE, &all_uris))
   return {};
 }
 
 std::expected<void, esp_err_t> stop() {
   esp_err_t result = ESP_OK;
-  RIE(httpd_stop(&SERVER_HANDLE))
+  RIE(httpd_stop(SERVER_HANDLE))
   return {};
 }
 
