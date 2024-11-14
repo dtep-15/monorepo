@@ -1,0 +1,38 @@
+name: Frontend build
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Cache trunk
+      id: cache-trunk
+      uses: actions/cache@v3
+      env:
+        cache-name: cache-trunk
+      with:
+        path: ~/.cargo/bin/trunk
+        key: ${{ runner.os }}-${{ env.cache-name }}-${{ hashFiles('**/Cargo.lock') }}
+
+    - if: ${{ steps.cache-trunk.outputs.cache-hit != 'true' }}
+      name: Install trunk
+      run: cargo install --locked trunk
+
+    - name: Build
+      run: trunk -v build --release

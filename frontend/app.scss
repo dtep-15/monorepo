@@ -1,0 +1,143 @@
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+:root {
+    --bg-color: #1f1e1f;
+	--bg-accent: #3d3b3c;
+    --fg-color: #ffffff;
+	--fg-accent: #8fb339;
+
+	--loading-bar-width: 16rem;
+}
+
+html, body {
+    width: 100vw;
+    min-height: 100vh;
+    
+    padding: 0;
+    margin: 0;
+
+	font-family: "Roboto", sans-serif;
+	font-size: large;
+
+    background-color: var(--bg-color);
+	color: var(--fg-color);
+}
+
+button {
+	background-color: var(--bg-accent);
+	color: var(--fg-color);
+	border-radius: 10px;
+	font-family: inherit;
+	font-size: 1rem;
+	padding: 0.5rem 1rem 0.5rem 1rem;
+
+	border: none;
+}
+
+.button-accent {
+	border: var(--fg-accent) solid 2px;
+}
+
+label {
+	margin-bottom: 0.5rem;
+}
+
+input[type=password], input[type=time] {
+	background-color: var(--bg-accent);
+	color: var(--fg-color);
+	border-radius: 4px;
+	font-family: inherit;
+	font-size: 1rem;
+	padding: 0.5rem 1rem 0.5rem 1rem;
+
+	border: none;
+}
+
+.push-right {
+	margin-left: auto;
+}
+
+dt-centered-col {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	flex: 1;
+}
+
+@keyframes blink-display {
+	50% {
+		visibility: hidden;
+	}
+
+	100% {
+		visibility: hidden;
+	}
+}
+
+dt-loading-bar {
+	display: block;
+	width: var(--loading-bar-width);
+	height: 0.5rem;
+	background: linear-gradient(
+		90deg,
+		var(--bg-accent) 0% 40%,
+		var(--fg-accent) 40% 60%,
+		var(--bg-accent) 60% 100%
+	);
+	border-radius: 1rem;
+	background-size: 260% 260%;
+	animation: loading-bar-anim 3s cubic-bezier(0.6, 0, 0.4, 1) 0s infinite normal forwards;
+}
+
+@keyframes loading-bar-anim {
+	0% {
+		background-position: 100%;
+	}
+	100% {
+		background-position: 0%;
+	}
+}
+
+dt-app {
+	width: 100vw;
+    min-height: 100vh;
+
+	display: flex;
+	flex-direction: column;
+
+	padding: max(1rem, 5vh) max(2rem, 15vw);
+}
+
+dt-network {
+	display: flex;
+	flex-direction: column;
+
+	padding-bottom: 1rem;
+	border-bottom: var(--fg-color) solid 1px;
+}
+
+.network-password {
+	width: min(16rem, 100%);
+}
+
+dt-button-list {
+	display: flex;
+	flex-direction: row;
+}
+
+.network-connecting-bar {
+	--loading-bar-width: 24rem;
+}
+
+dt-schedule {
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+}
+
+dt-schedule-part {
+	width: max(50%, 16rem);
+}

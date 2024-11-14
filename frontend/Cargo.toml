@@ -1,0 +1,25 @@
+[package]
+name = "frontend"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+mock-api = []
+
+[dependencies]
+anyhow = "1.0.93"
+cfg-if = "1.0.0"
+console_error_panic_hook = "0.1.7"
+gloo-timers = { version = "0.3.0", features = ["futures"] }
+leptos = { version = "0.7.0-preview2", features = ["csr", "nightly"] }
+log = "0.4.22"
+reqwest = { version = "0.12.9", features = ["json"] }
+serde = { version = "1.0.214", features = ["derive"] }
+serde_json = "1.0.132"
+wasm-logger = "0.2.0"
+web-sys = { version = "0.3.72", features = ["Element", "Document", "Storage"] }
+
+[profile.release]
+opt-level = "z"
+strip = true
+lto = true

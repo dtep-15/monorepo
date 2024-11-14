@@ -1,0 +1,128 @@
+openapi: 3.0.3
+info:
+  title: Automatic Curtain Opener
+  description: |-
+    API spec for the automatic curtain opener
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  version: 0.1.0
+servers:
+  - url: http://curtains.local/
+tags:
+  - name: state
+    description: General device state
+  - name: networks
+  - name: schedule
+paths:
+  /api/state:
+    get:
+      tags:
+        - state
+      operationId: getState
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/State'
+  /api/networks:
+    get:
+      tags:
+        - networks
+      operationId: getNetworks
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Networks'
+  /api/networks/connect:
+    post:
+      tags:
+        - networks
+      operationId: networkConnect
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NetworkConnect'
+      responses:
+        '200':
+          description: connection successful
+        '403':
+          description: Failed to connect to the specified network
+  /api/schedule:
+    get:
+      tags:
+        - schedule
+      operationId: getSchedule
+      responses:
+        '200':
+          description: "success"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Schedule'
+    post:
+      tags:
+        - schedule
+      operationId: postSchedule
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Schedule'
+      responses:
+        '200':
+          description: "success"
+components:
+  schemas:
+    State:
+      type: object
+      required:
+        - is_configured
+      properties:
+        is_configured:
+          type: boolean
+          example: true
+    Networks:
+      type: array
+      items:
+        $ref: '#/components/schemas/NetworkInfo'
+    NetworkInfo:
+      type: object
+      properties:
+        name:
+          type: string
+          example: eduroam
+        password_protected:
+          type: boolean
+          example: true
+    NetworkConnect:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          example: "eduroam"
+        password:
+          type: string
+          example: "loremipsum123"
+    Schedule:
+      type: object
+      required:
+        - open_at
+        - close_at
+      properties:
+        open_at:
+          type: string
+          format: rfc3339-partial-time
+          example: "8:42:00"
+        close_at:
+          type: string
+          format: rfc3339-partial-time
+          example: "8:42:00"
