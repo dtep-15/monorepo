@@ -12,8 +12,6 @@ namespace Curtain {
 std::expected<void, esp_err_t> init(const Config& config) {
   esp_err_t result = ESP_OK;
 
-  gpio_install_isr_service()
-
   mcpwm_timer_handle_t timer = nullptr;
   mcpwm_timer_config_t timer_config = {
       .group_id = config.group,
