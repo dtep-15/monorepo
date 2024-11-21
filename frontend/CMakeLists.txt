@@ -1,5 +1,3 @@
-add_library(frontend)
-
 add_custom_target(frontend trunk build --release)
 
 get_filename_component(PARENT_DIR ${CMAKE_SOURCE_DIR}/.. ABSOLUTE)
