@@ -3,16 +3,41 @@
 #include <driver/gpio.h>
 #include <driver/mcpwm_prelude.h>
 #include <freertos/FreeRTOS.h>
+#include <atomic>
 #include <iostream>
 
 #include "common.h"
 
 namespace Curtain {
 
+enum class State {
+    Open,
+    Closed,
+    Unknown,
+};
+
+const int GPIO_OPEN_BTN = 13, GPIO_CLOSED_BTN = 14;
+
+static void gpio_interrupt_handler(void* args);
+
 std::expected<void, esp_err_t> init(const Config& config) {
   esp_err_t result = ESP_OK;
 
-  gpio_install_isr_service()
+  gpio_install_isr_service(0);
+
+  gpio_reset_pin(GPIO_OPEN_BTN);
+  gpio_set_direction(GPIO_OPEN_BTN, GPIO_MODE_INPUT);
+  gpio_pulldown_dis(GPIO_OPEN_BTN);
+  gpio_pullup_en(GPIO_OPEN_BTN);
+  gpio_set_intr_type(GPIO_OPEN_BTN, GPIO_INTR_NEGEDGE);
+  gpio_isr_handler_add(GPIO_OPEN_BTN, gpio_interrupt_handler, (void*)GPIO_OPEN_BTN);
+
+  gpio_reset_pin(GPIO_CLOSED_BTN);
+  gpio_set_direction(GPIO_CLOSED_BTN, GPIO_MODE_INPUT);
+  gpio_pulldown_dis(GPIO_CLOSED_BTN);
+  gpio_pullup_en(GPIO_CLOSED_BTN);
+  gpio_set_intr_type(GPIO_CLOSED_BTN, GPIO_INTR_NEGEDGE);
+  gpio_isr_handler_add(GPIO_CLOSED_BTN, gpio_interrupt_handler, (void*)GPIO_CLOSED_BTN);
 
   mcpwm_timer_handle_t timer = nullptr;
   mcpwm_timer_config_t timer_config = {
@@ -54,8 +79,6 @@ std::expected<void, esp_err_t> init(const Config& config) {
   RIE(mcpwm_timer_start_stop(timer, MCPWM_TIMER_START_NO_STOP))
   /*   while (true) {
       std::cout << "Full speed" << std::endl;
-      RIE(mcpwm_comparator_set_compare_value(comparator, 2'000));
-      vTaskDelay(pdMS_TO_TICKS(2000));
       std::cout << "Off" << std::endl;
       RIE(mcpwm_comparator_set_compare_value(comparator, 1'500));
       vTaskDelay(pdMS_TO_TICKS(2000));
@@ -67,6 +90,40 @@ std::expected<void, esp_err_t> init(const Config& config) {
   return {};
 }
 
-// std::expected<void, esp_err_t> set(State state) {}
+volatile State current_state = State::Unknown;
+
+static std::expected<void, esp_err_t> move_to_state(State state) {
+  assert(state != State::Unknown);
+
+  if (current_state == state)
+    return;
+
+  if (state == State::Open) {
+    // Normal
+    RIE(mcpwm_comparator_set_compare_value(comparator, 2'000));
+  } else {
+    // Reverse
+    RIE(mcpwm_comparator_set_compare_value(comparator, 1'000));
+  }
+}
+
+static void disable_servo() {
+  RIE(mcpwm_comparator_set_compare_value(comparator, 1'500));
+}
+
+static void gpio_interrupt_handler(void* args) {
+  int gpio_pin = (int)args;
+
+  assert(gpio_pin == GPIO_OPEN_BTN || gpio_pin == GPIO_CLOSED_BTN);
+
+  State next_state = gpio_pin == GPIO_OPEN_BTN ? State::Open : State::Closed;
+
+  // Debouncing
+  if (current_state == next_state)
+    return;
+
+  current_state = next_state;
+  disable_servo();
+}
 
 }  // namespace Curtain
