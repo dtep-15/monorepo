@@ -12,6 +12,7 @@
 #include <cstdio>
 
 #include "esp_vfs.h"
+#include "esp_netif_types.h"
 
 #include "common.h"
 #include "config.h"
@@ -55,11 +56,10 @@ extern "C" void app_main() {
   auto sta_netif = esp_netif_create_default_wifi_sta();
 
   WiFi::init();
-  if (config->ssid.has_value()) {
-    WiFi::STA::connect(config->ssid.value(), config->password);
-  } else {
+  if (!(config->ssid.has_value() && WiFi::STA::connect(config->ssid.value(), config->password).has_value())) {
     WiFi::AP::start("Uninitialized Curtain Opener");
   }
+
   // clang-format off
   Server::init(LittleFSConfig.base_path, {
   {"state", HTTP_GET, [](const auto req) {
@@ -132,5 +132,5 @@ extern "C" void app_main() {
   // clang-format on 
   mdns_init();
   mdns_hostname_set("curtain");
-  // Curtain::init({.gpio_num = 14, .resolution=1'000'000, .period_ticks=20'000});
+  Curtain::init({.gpio_num = 12});
 }
