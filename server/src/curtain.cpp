@@ -7,18 +7,80 @@
 #include <iostream>
 
 #include "common.h"
+#include "config.h"
+
+extern Config* config;
 
 namespace Curtain {
 
 enum class State {
-    Open,
-    Closed,
-    Unknown,
+  Open,
+  Closed,
+  Unknown,
 };
 
-const int GPIO_OPEN_BTN = 13, GPIO_CLOSED_BTN = 14;
+static volatile State current_state = State::Unknown;
+
+const gpio_num_t GPIO_OPEN_BTN = GPIO_NUM_13, GPIO_CLOSED_BTN = GPIO_NUM_14;
 
 static void gpio_interrupt_handler(void* args);
+
+static TaskHandle_t schedule_task_handle;
+static mcpwm_cmpr_handle_t comparator = nullptr;
+
+static std::expected<void, esp_err_t> move_to_state(State state) {
+  esp_err_t result = ESP_OK;
+  assert(state != State::Unknown);
+
+  if (current_state == state)
+    return {};
+
+  if (state == State::Open) {
+    // Normal
+    RIE(mcpwm_comparator_set_compare_value(comparator, 2'000));
+  } else {
+    // Reverse
+    RIE(mcpwm_comparator_set_compare_value(comparator, 1'000));
+  }
+
+  return {};
+}
+
+void schedule_task(void* arg) {
+  // function to get time: gettimeofday
+  while (true) {
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    uint32_t now_seconds = now.tv_sec;
+    uint32_t open_time = config->open_time;
+    uint32_t close_time = config->close_time;
+    uint32_t earlier_time = std::min(open_time, close_time);
+    uint32_t later_time = std::max(open_time, close_time);
+
+    if (now_seconds > earlier_time) {
+      if (now_seconds > later_time) {
+        if (later_time == open_time) {
+          move_to_state(State::Open);
+        } else {
+          move_to_state(State::Closed);
+        }
+      } else {
+        if (earlier_time == open_time) {
+          move_to_state(State::Open);
+        } else {
+          move_to_state(State::Closed);
+        }
+      }
+    } else if (later_time == open_time) {
+      move_to_state(State::Open);
+    } else {
+      move_to_state(State::Closed);
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(1000));
+  }
+}
+
 
 std::expected<void, esp_err_t> init(const Config& config) {
   esp_err_t result = ESP_OK;
@@ -53,15 +115,16 @@ std::expected<void, esp_err_t> init(const Config& config) {
   RIE(mcpwm_new_operator(&operator_config, &oper))
   mcpwm_operator_connect_timer(oper, timer);
 
-  mcpwm_cmpr_handle_t comparator = nullptr;
   mcpwm_comparator_config_t comparator_config = {
       .flags = {.update_cmp_on_tez = true},
   };
   RIE(mcpwm_new_comparator(oper, &comparator_config, &comparator))
 
   mcpwm_gen_handle_t generator = nullptr;
-  mcpwm_generator_config_t generator_config = {.gen_gpio_num = config.gpio_num,
-                                               .flags = {.pull_up = true, .pull_down = false}};
+  mcpwm_generator_config_t generator_config = {
+      .gen_gpio_num = config.gpio_num,
+      .flags = {.pull_up = true, .pull_down = false},
+  };
 
   RIE(mcpwm_new_generator(oper, &generator_config, &generator));
 
@@ -87,28 +150,16 @@ std::expected<void, esp_err_t> init(const Config& config) {
       vTaskDelay(pdMS_TO_TICKS(2000));
     } */
 
+  auto task_result = xTaskCreate(schedule_task, "SCHEDULE_TASK", CONFIG_ESP_MAIN_TASK_STACK_SIZE, nullptr,
+                                 tskIDLE_PRIORITY, &schedule_task_handle);
+  if (task_result != pdPASS) {
+    return std::unexpected(ESP_FAIL);
+  }
   return {};
 }
 
-volatile State current_state = State::Unknown;
-
-static std::expected<void, esp_err_t> move_to_state(State state) {
-  assert(state != State::Unknown);
-
-  if (current_state == state)
-    return;
-
-  if (state == State::Open) {
-    // Normal
-    RIE(mcpwm_comparator_set_compare_value(comparator, 2'000));
-  } else {
-    // Reverse
-    RIE(mcpwm_comparator_set_compare_value(comparator, 1'000));
-  }
-}
-
 static void disable_servo() {
-  RIE(mcpwm_comparator_set_compare_value(comparator, 1'500));
+  mcpwm_comparator_set_compare_value(comparator, 1'500);
 }
 
 static void gpio_interrupt_handler(void* args) {

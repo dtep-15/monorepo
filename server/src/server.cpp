@@ -31,6 +31,7 @@ static esp_err_t file_handler(httpd_req_t* req) {
 
   if (canonical.value() == "") {
     canonical = "index.html";
+    std::cout << "Serving index" << std::endl;
   }
 
   std::string final_path = concat_paths(public_prefix, canonical.value());
