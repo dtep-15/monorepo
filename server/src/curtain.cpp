@@ -28,13 +28,20 @@ static void gpio_interrupt_handler(void* args);
 static TaskHandle_t schedule_task_handle;
 static mcpwm_cmpr_handle_t comparator = nullptr;
 
-static void restore_state_from_buttons() {
-    
-}
-
 static std::expected<void, esp_err_t> move_to_state(State state) {
   esp_err_t result = ESP_OK;
   assert(state != State::Unknown);
+
+  // Pull-up pins
+  bool open_btn_state = !gpio_get_level(GPIO_OPEN_BTN);
+  bool closed_btn_state = !gpio_get_level(GPIO_CLOSED_BTN);
+
+  // Open & closed buttons may already be pressed, in which case the interrupt won't get triggered
+  if (open_btn_state) {
+    state = State::Open;
+  } else if (closed_btn_state) {
+    state = State::Closed;
+  }
 
   if (current_state == state) {
     // std::cout << "Already set" << std::endl;
