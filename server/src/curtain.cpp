@@ -64,9 +64,10 @@ static std::expected<void, esp_err_t> move_to_state(State state) {
 void schedule_task(void* arg) {
   // function to get time: gettimeofday
   while (true) {
-    struct timeval now;
-    gettimeofday(&now, NULL);
-    uint32_t now_minutes = (now.tv_sec / 60) % (60 * 24);
+    time_t now_time = time(nullptr);
+    tm now = *localtime(&now_time);
+
+    uint32_t now_minutes = now.tm_hour * 60 + now.tm_min;
     uint32_t open_time = config->open_time;
     uint32_t close_time = config->close_time;
     uint32_t earlier_time = std::min(open_time, close_time);
