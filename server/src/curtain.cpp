@@ -3,16 +3,111 @@
 #include <driver/gpio.h>
 #include <driver/mcpwm_prelude.h>
 #include <freertos/FreeRTOS.h>
+#include <atomic>
 #include <iostream>
 
 #include "common.h"
+#include "config.h"
+
+extern Config* config;
 
 namespace Curtain {
+
+enum class State {
+  Open,
+  Closed,
+  Unknown,
+};
+
+static volatile State current_state = State::Unknown;
+
+const gpio_num_t GPIO_OPEN_BTN = GPIO_NUM_13, GPIO_CLOSED_BTN = GPIO_NUM_14;
+
+static void gpio_interrupt_handler(void* args);
+
+static TaskHandle_t schedule_task_handle;
+static mcpwm_cmpr_handle_t comparator = nullptr;
+
+static void restore_state_from_buttons() {
+    
+}
+
+static std::expected<void, esp_err_t> move_to_state(State state) {
+  esp_err_t result = ESP_OK;
+  assert(state != State::Unknown);
+
+  if (current_state == state) {
+    // std::cout << "Already set" << std::endl;
+    return {};
+  }
+
+  if (state == State::Open) {
+    // std::cout << "Open" << std::endl;
+    // Normal
+    RIE(mcpwm_comparator_set_compare_value(comparator, 2'000));
+  } else {
+    // std::cout << "Closed" << std::endl;
+    // Reverse
+    RIE(mcpwm_comparator_set_compare_value(comparator, 1'000));
+  }
+
+  return {};
+}
+
+void schedule_task(void* arg) {
+  // function to get time: gettimeofday
+  while (true) {
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    uint32_t now_minutes = (now.tv_sec / 60) % (60 * 24);
+    uint32_t open_time = config->open_time;
+    uint32_t close_time = config->close_time;
+    uint32_t earlier_time = std::min(open_time, close_time);
+    uint32_t later_time = std::max(open_time, close_time);
+
+    if (now_minutes > earlier_time) {
+      if (now_minutes > later_time) {
+        if (later_time == open_time) {
+          move_to_state(State::Open);
+        } else {
+          move_to_state(State::Closed);
+        }
+      } else {
+        if (earlier_time == open_time) {
+          move_to_state(State::Open);
+        } else {
+          move_to_state(State::Closed);
+        }
+      }
+    } else if (later_time == open_time) {
+      move_to_state(State::Open);
+    } else {
+      move_to_state(State::Closed);
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(1000));
+  }
+}
+
 
 std::expected<void, esp_err_t> init(const Config& config) {
   esp_err_t result = ESP_OK;
 
-  gpio_install_isr_service()
+  gpio_install_isr_service(0);
+
+  gpio_reset_pin(GPIO_OPEN_BTN);
+  gpio_set_direction(GPIO_OPEN_BTN, GPIO_MODE_INPUT);
+  gpio_pulldown_dis(GPIO_OPEN_BTN);
+  gpio_pullup_en(GPIO_OPEN_BTN);
+  gpio_set_intr_type(GPIO_OPEN_BTN, GPIO_INTR_NEGEDGE);
+  gpio_isr_handler_add(GPIO_OPEN_BTN, gpio_interrupt_handler, (void*)GPIO_OPEN_BTN);
+
+  gpio_reset_pin(GPIO_CLOSED_BTN);
+  gpio_set_direction(GPIO_CLOSED_BTN, GPIO_MODE_INPUT);
+  gpio_pulldown_dis(GPIO_CLOSED_BTN);
+  gpio_pullup_en(GPIO_CLOSED_BTN);
+  gpio_set_intr_type(GPIO_CLOSED_BTN, GPIO_INTR_NEGEDGE);
+  gpio_isr_handler_add(GPIO_CLOSED_BTN, gpio_interrupt_handler, (void*)GPIO_CLOSED_BTN);
 
   mcpwm_timer_handle_t timer = nullptr;
   mcpwm_timer_config_t timer_config = {
@@ -28,15 +123,16 @@ std::expected<void, esp_err_t> init(const Config& config) {
   RIE(mcpwm_new_operator(&operator_config, &oper))
   mcpwm_operator_connect_timer(oper, timer);
 
-  mcpwm_cmpr_handle_t comparator = nullptr;
   mcpwm_comparator_config_t comparator_config = {
       .flags = {.update_cmp_on_tez = true},
   };
   RIE(mcpwm_new_comparator(oper, &comparator_config, &comparator))
 
   mcpwm_gen_handle_t generator = nullptr;
-  mcpwm_generator_config_t generator_config = {.gen_gpio_num = config.gpio_num,
-                                               .flags = {.pull_up = true, .pull_down = false}};
+  mcpwm_generator_config_t generator_config = {
+      .gen_gpio_num = config.gpio_num,
+      .flags = {.pull_up = true, .pull_down = false},
+  };
 
   RIE(mcpwm_new_generator(oper, &generator_config, &generator));
 
@@ -54,8 +150,6 @@ std::expected<void, esp_err_t> init(const Config& config) {
   RIE(mcpwm_timer_start_stop(timer, MCPWM_TIMER_START_NO_STOP))
   /*   while (true) {
       std::cout << "Full speed" << std::endl;
-      RIE(mcpwm_comparator_set_compare_value(comparator, 2'000));
-      vTaskDelay(pdMS_TO_TICKS(2000));
       std::cout << "Off" << std::endl;
       RIE(mcpwm_comparator_set_compare_value(comparator, 1'500));
       vTaskDelay(pdMS_TO_TICKS(2000));
@@ -64,9 +158,31 @@ std::expected<void, esp_err_t> init(const Config& config) {
       vTaskDelay(pdMS_TO_TICKS(2000));
     } */
 
+  auto task_result = xTaskCreate(schedule_task, "SCHEDULE_TASK", CONFIG_ESP_MAIN_TASK_STACK_SIZE, nullptr,
+                                 tskIDLE_PRIORITY, &schedule_task_handle);
+  if (task_result != pdPASS) {
+    return std::unexpected(ESP_FAIL);
+  }
   return {};
 }
 
-// std::expected<void, esp_err_t> set(State state) {}
+static void disable_servo() {
+  mcpwm_comparator_set_compare_value(comparator, 1'500);
+}
+
+static void gpio_interrupt_handler(void* args) {
+  int gpio_pin = (int)args;
+
+  assert(gpio_pin == GPIO_OPEN_BTN || gpio_pin == GPIO_CLOSED_BTN);
+
+  State next_state = gpio_pin == GPIO_OPEN_BTN ? State::Open : State::Closed;
+
+  // Debouncing
+  if (current_state == next_state)
+    return;
+
+  current_state = next_state;
+  disable_servo();
+}
 
 }  // namespace Curtain

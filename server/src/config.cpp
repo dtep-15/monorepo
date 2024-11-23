@@ -4,12 +4,14 @@
 
 #include <ArduinoJson.hpp>
 #include <fstream>
+#include <iostream>
 
 namespace Json = ArduinoJson;
 
 Config::Config(const std::string location) : location_(std::move(location)) {
   const auto file = read_file(location_);
   if (file.has_value()) {
+    std::cout << "Config exists" << std::endl;
     Json::JsonDocument doc;
     Json::deserializeJson(doc, file.value());
     open_time = doc["open_time"] | open_time;
@@ -20,6 +22,8 @@ Config::Config(const std::string location) : location_(std::move(location)) {
     if (!doc["password"].isNull()) {
       password = std::optional<std::string>(doc["password"]);
     }
+  } else {
+    std::cout << "Config does not exist" << std::endl;
   }
 }
 

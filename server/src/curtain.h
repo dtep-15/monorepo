@@ -6,18 +6,9 @@
 
 namespace Curtain {
 
-enum State {
-    OPEN,
-    CLOSED,
-    UNKNOWN
-};
-
-static State state = UNKNOWN;
-
 struct Config {
     uint8_t gpio_num;
     int group = 0;
-    uint8_t endstops[2];
 };
 
 std::expected<void, esp_err_t> init(const Config& config);

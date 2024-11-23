@@ -8,8 +8,8 @@
 class Config {
  public:
   Config(std::string location);
-  uint32_t open_time = 21600; // 6 AM
-  uint32_t close_time = 64800; // 6 PM
+  uint16_t open_time = 60*6; // 6 AM
+  uint16_t close_time = 60*18; // 6 PM
   std::optional<std::string> ssid;
   std::optional<std::string> password;
   esp_err_t save();

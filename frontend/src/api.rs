@@ -14,7 +14,7 @@ pub fn init(base_uri: Arc<str>) {
 
 // reqwest doesn't support relative URIs
 fn uri(api_uri: &str) -> String {
-	format!("{}/{}", URI_BASE.get().expect("API client uninitialized"), api_uri)
+	format!("{}{}", URI_BASE.get().expect("API client uninitialized"), api_uri)
 }
 
 fn http() -> &'static reqwest::Client {
