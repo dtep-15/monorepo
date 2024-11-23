@@ -28,6 +28,10 @@ static void gpio_interrupt_handler(void* args);
 static TaskHandle_t schedule_task_handle;
 static mcpwm_cmpr_handle_t comparator = nullptr;
 
+static void restore_state_from_buttons() {
+    
+}
+
 static std::expected<void, esp_err_t> move_to_state(State state) {
   esp_err_t result = ESP_OK;
   assert(state != State::Unknown);
@@ -51,14 +55,14 @@ void schedule_task(void* arg) {
   while (true) {
     struct timeval now;
     gettimeofday(&now, NULL);
-    uint32_t now_seconds = now.tv_sec;
+    uint32_t now_minutes = now.tv_sec / 60;
     uint32_t open_time = config->open_time;
     uint32_t close_time = config->close_time;
     uint32_t earlier_time = std::min(open_time, close_time);
     uint32_t later_time = std::max(open_time, close_time);
 
-    if (now_seconds > earlier_time) {
-      if (now_seconds > later_time) {
+    if (now_minutes > earlier_time) {
+      if (now_minutes > later_time) {
         if (later_time == open_time) {
           move_to_state(State::Open);
         } else {
