@@ -36,13 +36,17 @@ static std::expected<void, esp_err_t> move_to_state(State state) {
   esp_err_t result = ESP_OK;
   assert(state != State::Unknown);
 
-  if (current_state == state)
+  if (current_state == state) {
+    // std::cout << "Already set" << std::endl;
     return {};
+  }
 
   if (state == State::Open) {
+    // std::cout << "Open" << std::endl;
     // Normal
     RIE(mcpwm_comparator_set_compare_value(comparator, 2'000));
   } else {
+    // std::cout << "Closed" << std::endl;
     // Reverse
     RIE(mcpwm_comparator_set_compare_value(comparator, 1'000));
   }
@@ -55,7 +59,7 @@ void schedule_task(void* arg) {
   while (true) {
     struct timeval now;
     gettimeofday(&now, NULL);
-    uint32_t now_minutes = now.tv_sec / 60;
+    uint32_t now_minutes = (now.tv_sec / 60) % (60 * 24);
     uint32_t open_time = config->open_time;
     uint32_t close_time = config->close_time;
     uint32_t earlier_time = std::min(open_time, close_time);

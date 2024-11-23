@@ -1,6 +1,5 @@
 #include "wifi.h"
 
-#include <nvs_flash.h>
 #include <cstring>
 #include "esp_netif_sntp.h"
 
@@ -13,9 +12,6 @@ static wifi_mode_t MODE;
 
 std::expected<void, esp_err_t> init() {
   esp_err_t result = ESP_OK;
-  if (WIFI_NVS_ENABLED) {
-    RIE(nvs_flash_init())
-  }
   RIE(esp_wifi_init(&INIT_CONFIG))
   return {};
 }
@@ -60,7 +56,7 @@ std::expected<void, esp_err_t> stop() {
 
 namespace STA {
 
-static wifi_sta_config_t STA_CONFIG = {0};
+static wifi_sta_config_t STA_CONFIG = {.scan_method = WIFI_ALL_CHANNEL_SCAN, .bssid_set = false, .failure_retry_cnt = 5};
 
 std::expected<void, esp_err_t> connect(const std::string& ssid, const std::optional<std::string> password) {
   esp_err_t result = ESP_OK;
@@ -81,12 +77,13 @@ std::expected<void, esp_err_t> connect(const std::string& ssid, const std::optio
   RIE(esp_wifi_set_mode(MODE))
   RIE(esp_wifi_set_config(WIFI_IF_STA, reinterpret_cast<wifi_config_t*>(&STA_CONFIG)))
   RIE(esp_wifi_start())
+  RIE(esp_wifi_connect())
 
-  esp_sntp_config_t sntp_config = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
-  esp_netif_sntp_init(&sntp_config);
+  vTaskDelay(pdMS_TO_TICKS(1000));
 
   if (esp_netif_sntp_sync_wait(pdMS_TO_TICKS(10000)) != ESP_OK) {
     puts("Failed to sync SNTP within 10s.");
+    return std::unexpected(ESP_FAIL);
   }
   return {};
 }

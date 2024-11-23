@@ -9,8 +9,11 @@
 #include <memory>
 #include <stack>
 #include <string>
+#include <nvs_flash.h>
+
 #include <vector>
 
+#include "esp_netif_sntp.h"
 #include "esp_netif_types.h"
 #include "esp_vfs.h"
 
@@ -44,20 +47,22 @@ extern "C" void app_main() {
   auto ap_netif = esp_netif_create_default_wifi_ap();
   auto sta_netif = esp_netif_create_default_wifi_sta();
 
+  esp_sntp_config_t sntp_config = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
+  esp_netif_sntp_init(&sntp_config);
+
+  nvs_flash_init();
+
   WiFi::init();
   if (!(config->ssid.has_value() && WiFi::STA::connect(config->ssid.value(), config->password).has_value())) {
-    WiFi::AP::start("Uninitialized Curtain Opener");
+    WiFi::AP::start("Curtain Opener");
   }
 
   // clang-format off
   Server::init(LittleFSConfig.base_path, {
   {"state", HTTP_GET, [](const auto req) {
     Json::JsonDocument doc; 
-    if (config->ssid.has_value()) {
-        doc["is_configured"] = true;
-    } else {
-        doc["is_configured"] = false;
-    }
+    wifi_ap_record_t record;
+    doc["is_configured"] = config->ssid.has_value() && esp_wifi_sta_get_ap_info(&record) == ESP_OK;
     std::string result;
     Json::serializeJson(doc, result);
     return Server::API::Response(result, "200 OK");
