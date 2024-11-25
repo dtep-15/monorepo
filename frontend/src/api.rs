@@ -71,7 +71,9 @@ pub mod toggle {
 			} else {
 				http().post(uri("/api/toggle"))
 					.send().await?
-					.error_for_status()?
+					.error_for_status()?;
+
+				Ok(())
 			}
 		}
 	}
