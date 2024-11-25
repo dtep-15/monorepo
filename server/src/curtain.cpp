@@ -20,6 +20,8 @@ enum class State {
 };
 
 static volatile State current_state = State::Unknown;
+static volatile State previous_state = State::Unknown;
+volatile bool manual_toggle = false;
 
 const gpio_num_t GPIO_OPEN_BTN = GPIO_NUM_13, GPIO_CLOSED_BTN = GPIO_NUM_14;
 
@@ -31,6 +33,19 @@ static mcpwm_cmpr_handle_t comparator = nullptr;
 static std::expected<void, esp_err_t> move_to_state(State state) {
   esp_err_t result = ESP_OK;
   assert(state != State::Unknown);
+
+  if (previous_state != current_state) {
+    manual_toggle = false;
+  }
+  previous_state = current_state;
+
+  if (manual_toggle) {
+    if (state == State::Open) {
+      state = State::Closed;
+    } else {
+      state = State::Open;
+    }
+  }
 
   // Pull-up pins
   bool open_btn_state = !gpio_get_level(GPIO_OPEN_BTN);
@@ -66,7 +81,7 @@ void schedule_task(void* arg) {
   while (true) {
     struct timeval now;
     gettimeofday(&now, NULL);
-    uint32_t now_minutes = ((now.tv_sec / 60) + 2*60) % (60 * 24);
+    uint32_t now_minutes = ((now.tv_sec / 60) + 2 * 60) % (60 * 24);
     std::cout << now_minutes << std::endl;
     uint32_t open_time = config->open_time;
     uint32_t close_time = config->close_time;
@@ -96,7 +111,6 @@ void schedule_task(void* arg) {
     vTaskDelay(pdMS_TO_TICKS(1000));
   }
 }
-
 
 std::expected<void, esp_err_t> init(const Config& config) {
   esp_err_t result = ESP_OK;

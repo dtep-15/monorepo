@@ -35,6 +35,7 @@ const static esp_vfs_littlefs_conf_t LittleFSConfig{
 };
 
 Config* config;
+extern volatile bool manual_toggle;
 
 extern "C" void app_main() {
   if (esp_vfs_littlefs_register(&LittleFSConfig) != ESP_OK) {
@@ -120,6 +121,9 @@ extern "C" void app_main() {
       config->open_time = doc["open_at"] | 60*6;
       config->close_time = doc["close_at"] | 60*18;
       config->save();
+      return Server::API::Response("", "200 OK");
+    }}, {"toggle", HTTP_POST, [](const auto req) {
+      manual_toggle = !manual_toggle;
       return Server::API::Response("", "200 OK");
     }}}
   );
