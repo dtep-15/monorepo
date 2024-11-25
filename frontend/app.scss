@@ -4,7 +4,8 @@
 
 :root {
     --bg-color: #1f1e1f;
-	--bg-accent: #3d3b3c;
+	--bg-accent: #4e4d4e;
+	--bg-accent-active: #353535;
     --fg-color: #ffffff;
 	--fg-accent: #8fb339;
 
@@ -32,8 +33,13 @@ button {
 	font-family: inherit;
 	font-size: 1rem;
 	padding: 0.5rem 1rem 0.5rem 1rem;
+	margin: 0.5rem;
 
 	border: none;
+}
+
+button:active {
+	background-color: var(--bg-accent-active);
 }
 
 .button-accent {
@@ -111,6 +117,11 @@ dt-app {
 	padding: max(1rem, 5vh) max(2rem, 15vw);
 }
 
+dt-thin-app {
+	width: min(32rem, max(50vw, 16rem));
+	align-self: center;
+}
+
 dt-network {
 	display: flex;
 	flex-direction: column;
@@ -134,8 +145,9 @@ dt-button-list {
 
 dt-schedule {
 	display: flex;
-	flex-direction: row;
+	flex-direction: column;
 	flex-wrap: wrap;
+	margin-bottom: 1rem;
 }
 
 dt-schedule-part {

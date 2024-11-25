@@ -61,6 +61,22 @@ pub mod state {
 	}
 }
 
+pub mod toggle {
+	use super::*;
+
+	pub async fn toggle() -> anyhow::Result<()> {
+		cfg_if! {
+			if #[cfg(feature = "mock-api")] {
+				Ok(())
+			} else {
+				http().post(uri("/api/toggle"))
+					.send().await?
+					.error_for_status()?
+			}
+		}
+	}
+}
+
 pub mod networks {
     use super::*;
 

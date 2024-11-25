@@ -39,6 +39,14 @@ fn loaded_home(schedule: Schedule) -> impl IntoView {
 		format!("{:02}:{:02}", time.hours(), time.minutes())
 	}
 
+	let on_toggle = |_| {
+		log::info!("toggled");
+
+		spawn_local(async move {
+			api::retry(|| api::toggle::toggle()).await;
+		});
+	};
+
 	let on_submit_schedule = |event: SubmitEvent| {
 		let open_at = document().get_element_by_id("schedule-open-at")
 			.expect("input element doesn't exist")
@@ -68,22 +76,25 @@ fn loaded_home(schedule: Schedule) -> impl IntoView {
 	let close_at = format_time(schedule.close_at());
 	
 	view! {
-		<h1>Schedule:</h1>
-		<form id="schedule-form" on:submit={on_submit_schedule}></form>
-		<dt-schedule>
-			<dt-schedule-part>
-				<h2>Open:</h2>
-				<input id="schedule-open-at" type="time" value={open_at} form="schedule-form"></input>
-			</dt-schedule-part>
-			<dt-schedule-part>
-				<h2>Close:</h2>
-				<input id="schedule-close-at" type="time" value={close_at} form="schedule-form"></input>
-			</dt-schedule-part>
-		</dt-schedule>
-	
-		<dt-button-list>
-			{push_right()}
-			<button class="button-accent" type="submit" form="schedule-form">Save</button>
-		</dt-button-list>
+		<dt-thin-app>
+			<h1>Schedule:</h1>
+			<form id="schedule-form" on:submit={on_submit_schedule}></form>
+			<dt-schedule>
+				<dt-schedule-part>
+					<h2>Open:</h2>
+					<input id="schedule-open-at" type="time" value={open_at} form="schedule-form"></input>
+				</dt-schedule-part>
+				<dt-schedule-part>
+					<h2>Close:</h2>
+					<input id="schedule-close-at" type="time" value={close_at} form="schedule-form"></input>
+				</dt-schedule-part>
+			</dt-schedule>
+
+			<dt-button-list>
+				{push_right()}
+				<button on:click=on_toggle>Toggle</button>
+				<button class="button-accent" type="submit" form="schedule-form">Save</button>
+			</dt-button-list>
+		</dt-thin-app>
 	}
 }
