@@ -11,6 +11,8 @@
 
 extern Config* config;
 
+volatile bool manual_toggle = false;
+
 namespace Curtain {
 
 enum class State {
@@ -20,8 +22,7 @@ enum class State {
 };
 
 static volatile State current_state = State::Unknown;
-static volatile State previous_state = State::Unknown;
-volatile bool manual_toggle = false;
+static volatile State previous_req_state = State::Unknown;
 
 const gpio_num_t GPIO_OPEN_BTN = GPIO_NUM_13, GPIO_CLOSED_BTN = GPIO_NUM_14;
 
@@ -34,10 +35,10 @@ static std::expected<void, esp_err_t> move_to_state(State state) {
   esp_err_t result = ESP_OK;
   assert(state != State::Unknown);
 
-  if (previous_state != current_state) {
+  if (state != previous_req_state) {
     manual_toggle = false;
   }
-  previous_state = current_state;
+  previous_req_state = state;
 
   if (manual_toggle) {
     if (state == State::Open) {
