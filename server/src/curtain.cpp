@@ -38,22 +38,22 @@ static std::expected<void, esp_err_t> move_to_state(State state) {
 
   // Open & closed buttons may already be pressed, in which case the interrupt won't get triggered
   if (open_btn_state) {
-    state = State::Open;
+    current_state = State::Open;
   } else if (closed_btn_state) {
-    state = State::Closed;
+    current_state = State::Closed;
   }
 
   if (current_state == state) {
-    // std::cout << "Already set" << std::endl;
+    std::cout << "Already set" << std::endl;
     return {};
   }
 
   if (state == State::Open) {
-    // std::cout << "Open" << std::endl;
+    std::cout << "Open" << std::endl;
     // Normal
     RIE(mcpwm_comparator_set_compare_value(comparator, 2'000));
   } else {
-    // std::cout << "Closed" << std::endl;
+    std::cout << "Closed" << std::endl;
     // Reverse
     RIE(mcpwm_comparator_set_compare_value(comparator, 1'000));
   }
@@ -64,17 +64,17 @@ static std::expected<void, esp_err_t> move_to_state(State state) {
 void schedule_task(void* arg) {
   // function to get time: gettimeofday
   while (true) {
-    time_t now_time = time(nullptr);
-    tm now = *localtime(&now_time);
-
-    uint32_t now_minutes = now.tm_hour * 60 + now.tm_min;
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    uint32_t now_minutes = ((now.tv_sec / 60) + 2*60) % (60 * 24);
+    std::cout << now_minutes << std::endl;
     uint32_t open_time = config->open_time;
     uint32_t close_time = config->close_time;
     uint32_t earlier_time = std::min(open_time, close_time);
     uint32_t later_time = std::max(open_time, close_time);
 
-    if (now_minutes > earlier_time) {
-      if (now_minutes > later_time) {
+    if (now_minutes >= earlier_time) {
+      if (now_minutes >= later_time) {
         if (later_time == open_time) {
           move_to_state(State::Open);
         } else {

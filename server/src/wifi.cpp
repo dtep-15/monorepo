@@ -87,11 +87,6 @@ std::expected<void, esp_err_t> connect(const std::string& ssid, const std::optio
     return std::unexpected(ESP_FAIL);
   }
 
-  // Helsinki winter time (EST)
-  // UTC-2 actually means UTC+2 because POSIX
-  setenv("TZ", "UTC-2", 1);
-  tzset();
-
   return {};
 }
 
